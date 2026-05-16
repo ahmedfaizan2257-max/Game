@@ -1,6 +1,6 @@
 {
-  "name": "VaporPrize: Neon Skill Game Arena",
-  "description": "An arcade skill-competition platform where players enter tournaments to win premium real-world prizes like iPhone 16 Pro, competing on a live real-time leaderboard in addictive interactive game challenges.",
-  "requestFramePermissions": [],
+  "name": "DreamDrive: Luxury Supercar Driving Experiences",
+  "description": "The ultimate luxury supercar driving platform in South Africa. Explore Cape Town's scenic routes, track-day adventures, book elite vehicles like Shelby Cobras and Ferraris, plan and calculate packages dynamically, and chat with local racing consultants powered by Gemini.",
+  "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
