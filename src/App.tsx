@@ -26,46 +26,16 @@ import WinnersHall, { PastCompetition } from "./components/WinnersHall";
 import DepositVault, { LedgerEntry } from "./components/DepositVault";
 import SupportDesk from "./components/SupportDesk";
 
-interface ScoreEntry {
-  username: string;
-  score: number;
-  timestamp: string;
-  isUser: boolean;
-}
-
-interface Competition {
-  id: string;
-  title: string;
-  prizeName: string;
-  prizeValue: number;
-  entryFee: number;
-  description: string;
-  imageAlt: string;
-  endsAt: string;
-  status: "active" | "ended";
-  leaderboard: ScoreEntry[];
-  ticketCost: number;
-  timeLeftMs: number;
-  winner?: {
-    username: string;
-    score: number;
-  } | null;
-}
-
-interface UserProfile {
-  username: string;
-  balance: number;
-  tickets: Record<string, number>;
-  scoresSubmissions: Record<string, number[]>;
-}
-
-interface ActivityLog {
-  id: string;
-  username: string;
-  type: "deposit" | "enter" | "score" | "ended";
-  details: string;
-  timestamp: string;
-}
+import { 
+  ScoreEntry, 
+  Competition, 
+  UserProfile, 
+  ActivityLog,
+  FALLBACK_COMPETITIONS,
+  FALLBACK_PAST_COMPETITIONS,
+  FALLBACK_LEDGERS,
+  FALLBACK_ACTIVITIES
+} from "./utils/fallbackData";
 
 export default function App() {
   // Navigation Routing Tabs State
@@ -110,30 +80,194 @@ export default function App() {
   const [aiCommentary, setAiCommentary] = useState<string>("");
   const [aiGenerating, setAiGenerating] = useState(false);
 
-  // Synchronise state from backend APIs
-  const fetchState = async () => {
+  // Tracking if offline simulation is taking over
+  const [isClientMode, setIsClientMode] = useState(false);
+
+  // Load and Save local storage sandbox utilities
+  const loadClientState = () => {
     try {
-      const res = await fetch("/api/competitions");
+      const savedComps = localStorage.getItem("vapor_competitions");
+      const savedUser = localStorage.getItem("vapor_user");
+      const savedActivities = localStorage.getItem("vapor_activities");
+      const savedPast = localStorage.getItem("vapor_past_competitions");
+      const savedLedger = localStorage.getItem("vapor_ledger");
+
+      setCompetitions(savedComps ? JSON.parse(savedComps) : FALLBACK_COMPETITIONS());
+      setUserProfile(savedUser ? JSON.parse(savedUser) : {
+        username: "ArcadeRacer_99",
+        balance: 15.00,
+        tickets: { iphone: 1, ps5: 2 },
+        scoresSubmissions: {},
+      });
+      setActivities(savedActivities ? JSON.parse(savedActivities) : FALLBACK_ACTIVITIES());
+      setPastComps(savedPast ? JSON.parse(savedPast) : FALLBACK_PAST_COMPETITIONS());
+      setLedgerList(savedLedger ? JSON.parse(savedLedger) : FALLBACK_LEDGERS());
+    } catch (err) {
+      console.error("Failed to parse local storage, loading clean memory model", err);
+      setCompetitions(FALLBACK_COMPETITIONS());
+      setActivities(FALLBACK_ACTIVITIES());
+      setPastComps(FALLBACK_PAST_COMPETITIONS());
+      setLedgerList(FALLBACK_LEDGERS());
+    }
+  };
+
+  const saveClientStateDirectly = (
+    updatedComps: Competition[],
+    updatedUser: UserProfile,
+    updatedActivities: ActivityLog[],
+    updatedPast: PastCompetition[],
+    updatedLedger: LedgerEntry[]
+  ) => {
+    try {
+      localStorage.setItem("vapor_competitions", JSON.stringify(updatedComps));
+      localStorage.setItem("vapor_user", JSON.stringify(updatedUser));
+      localStorage.setItem("vapor_activities", JSON.stringify(updatedActivities));
+      localStorage.setItem("vapor_past_competitions", JSON.stringify(updatedPast));
+      localStorage.setItem("vapor_ledger", JSON.stringify(updatedLedger));
+    } catch (err) {
+      console.error("Storage error:", err);
+    }
+  };
+
+  const triggerClientMockOpponentPlay = () => {
+    const activeComps = competitions.filter(c => c.status === "active");
+    if (activeComps.length === 0) return;
+
+    const comp = activeComps[Math.floor(Math.random() * activeComps.length)];
+    const MOCK_NAMES = [
+      "cyber_edge", "retro_gamer_88", "alpha_stacker", "neon_pulse", "hacker_jack",
+      "grid_rider", "dystopian_future", "pixel_perfect", "gravity_rebel", "zero_cool",
+      "vector_wave", "laser_hawk", "tokyo_drift", "arcade_wizard", "stack_lord"
+    ];
+    const opponent = MOCK_NAMES[Math.floor(Math.random() * MOCK_NAMES.length)];
+    const actionType = Math.random() > 0.45 ? "score" : "enter";
+
+    const newActivities = [...activities];
+    const updatedComps = competitions.map(c => {
+      if (c.id !== comp.id) return c;
+      const leaderboard = [...c.leaderboard];
+      if (actionType === "enter") {
+        newActivities.unshift({
+          id: Math.random().toString(),
+          username: opponent,
+          type: "enter",
+          details: `Paid $${c.entryFee.toFixed(2)} and acquired entry ticket for ${c.prizeName}!`,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        let score = Math.floor(Math.random() * 14) + 2;
+        if (Math.random() > 0.92) score = Math.floor(Math.random() * 8) + 15;
+
+        const existingIdx = leaderboard.findIndex(e => e.username === opponent);
+        if (existingIdx !== -1) {
+          if (score > leaderboard[existingIdx].score) {
+            leaderboard[existingIdx] = {
+              ...leaderboard[existingIdx],
+              score,
+              timestamp: new Date().toISOString()
+            };
+          }
+        } else {
+          leaderboard.push({
+            username: opponent,
+            score,
+            timestamp: new Date().toISOString(),
+            isUser: false
+          });
+        }
+        leaderboard.sort((a, b) => b.score - a.score || new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        newActivities.unshift({
+          id: Math.random().toString(),
+          username: opponent,
+          type: "score",
+          details: `Scored ${score} on ${c.prizeName}! Rank is now #${leaderboard.findIndex(e => e.username === opponent) + 1}`,
+          timestamp: new Date().toISOString()
+        });
+      }
+      return { ...c, leaderboard };
+    });
+
+    const slicedActivities = newActivities.slice(0, 50);
+    setCompetitions(updatedComps);
+    setActivities(slicedActivities);
+    saveClientStateDirectly(updatedComps, userProfile, slicedActivities, pastComps, ledgerList);
+  };
+
+  // Synchronise state from backend APIs with fast timeout & client sandbox backup
+  const fetchState = async () => {
+    if (isClientMode) {
+      loadClientState();
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // 1.5s timeout logic prevents browser from freezing indefinitely if connection is blocked
+      const fetchWithTimeout = async (url: string) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        try {
+          const res = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          return res;
+        } catch (err) {
+          clearTimeout(timeoutId);
+          throw err;
+        }
+      };
+
+      const res = await fetchWithTimeout("/api/competitions");
+      const contentType = res.headers.get("content-type");
+      if (!res.ok || (contentType && contentType.includes("text/html"))) {
+        throw new Error("API responds with static index page (static server down or static host routing redirect)");
+      }
+
       const data = await res.json();
       setCompetitions(data.competitions);
       setUserProfile(data.user);
-      
-      const resAct = await fetch("/api/activity");
+
+      const resAct = await fetchWithTimeout("/api/activity");
       const dataAct = await resAct.json();
       setActivities(dataAct.activities);
 
-      // Fetch expanded multi-page records
-      const resPast = await fetch("/api/past-competitions");
+      const resPast = await fetchWithTimeout("/api/past-competitions");
       const dataPast = await resPast.json();
       setPastComps(dataPast.pastCompetitions);
 
-      const resLedger = await fetch("/api/wallet/ledger");
+      const resLedger = await fetchWithTimeout("/api/wallet/ledger");
       const dataLedger = await resLedger.json();
       setLedgerList(dataLedger.ledger);
 
       setLoading(false);
     } catch (e) {
-      console.error("Error communicating with VaporPrize server:", e);
+      console.warn("Express backend offline / static mode detected. Starting browser standalone client simulator.", e);
+      setIsClientMode(true);
+      // Fallback
+      try {
+        const savedComps = localStorage.getItem("vapor_competitions");
+        const savedUser = localStorage.getItem("vapor_user");
+        const savedActivities = localStorage.getItem("vapor_activities");
+        const savedPast = localStorage.getItem("vapor_past_competitions");
+        const savedLedger = localStorage.getItem("vapor_ledger");
+
+        setCompetitions(savedComps ? JSON.parse(savedComps) : FALLBACK_COMPETITIONS());
+        setUserProfile(savedUser ? JSON.parse(savedUser) : {
+          username: "ArcadeRacer_99",
+          balance: 15.00,
+          tickets: { iphone: 1, ps5: 2 },
+          scoresSubmissions: {},
+        });
+        setActivities(savedActivities ? JSON.parse(savedActivities) : FALLBACK_ACTIVITIES());
+        setPastComps(savedPast ? JSON.parse(savedPast) : FALLBACK_PAST_COMPETITIONS());
+        setLedgerList(savedLedger ? JSON.parse(savedLedger) : FALLBACK_LEDGERS());
+      } catch (err) {
+        setCompetitions(FALLBACK_COMPETITIONS());
+        setActivities(FALLBACK_ACTIVITIES());
+        setPastComps(FALLBACK_PAST_COMPETITIONS());
+        setLedgerList(FALLBACK_LEDGERS());
+      }
+      setLoading(false);
     }
   };
 
@@ -142,7 +276,54 @@ export default function App() {
     // Poll state every 7 seconds to keep rankings, live commentary, tickers synced smoothly
     const interval = setInterval(fetchState, 7000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isClientMode]);
+
+  // Handle client mode countdown & ticks
+  useEffect(() => {
+    if (isClientMode) {
+      const interval = setInterval(() => {
+        // 30% chance of opponent play inside interval
+        if (Math.random() > 0.7) {
+          triggerClientMockOpponentPlay();
+        }
+
+        const now = Date.now();
+        let changed = false;
+        const updatedComps = competitions.map(comp => {
+          const endsTime = new Date(comp.endsAt).getTime();
+          if (comp.status === "active" && endsTime <= now) {
+            changed = true;
+            const top = comp.leaderboard[0];
+            const updated: Competition = {
+              ...comp,
+              status: "ended",
+              winner: top ? { username: top.username, score: top.score } : null
+            };
+
+            const topUser = top ? top.username : "No-one";
+            const topScr = top ? top.score : 0;
+            const logEntry: ActivityLog = {
+              id: Math.random().toString(),
+              username: topUser,
+              type: "ended",
+              details: `🏆 Competition for ${comp.prizeName} ended! ${topUser} wins with score ${topScr}!`,
+              timestamp: new Date().toISOString()
+            };
+            setActivities(prev => [logEntry, ...prev].slice(0, 50));
+            return updated;
+          }
+          return comp;
+        });
+
+        if (changed) {
+          setCompetitions(updatedComps);
+          saveClientStateDirectly(updatedComps, userProfile, activities, pastComps, ledgerList);
+        }
+      }, 7000);
+
+      return () => clearInterval(interval);
+    }
+  }, [isClientMode, competitions, userProfile, activities, pastComps, ledgerList]);
 
   // Purchase Stacker game credits pass
   const handlePurchaseTicket = async (compId: string, fee: number) => {
@@ -151,6 +332,51 @@ export default function App() {
       setPaymentSuccess("");
       setTopUpAmount(Math.max(10, Math.ceil(fee - userProfile.balance)).toFixed(2));
       setShowTopUp(true);
+      return;
+    }
+
+    if (isClientMode) {
+      const newBalance = userProfile.balance - fee;
+      const newTickets = {
+        ...userProfile.tickets,
+        [compId]: (userProfile.tickets[compId] || 0) + 1
+      };
+
+      const txId = `TX-${Math.floor(Math.random() * 9000) + 1000}`;
+      const hexBytes = Array.from({length: 8}, () => Math.floor(Math.random()*16).toString(16)).join("");
+      const txHash = `0x${hexBytes}...7f00`;
+      const activeComp = competitions.find(c => c.id === compId);
+
+      const newLedger: LedgerEntry = {
+        id: txId,
+        type: "purchase",
+        amount: fee,
+        balanceAfter: newBalance,
+        hash: txHash,
+        timestamp: new Date().toISOString(),
+        details: `Acquired 'stacker run ticket' for ${activeComp?.prizeName || compId}`
+      };
+
+      const loginLog: ActivityLog = {
+        id: Math.random().toString(),
+        username: userProfile.username,
+        type: "enter",
+        details: `Paid $${fee.toFixed(2)} and acquired entry ticket for ${activeComp?.prizeName || compId}!`,
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedUser: UserProfile = {
+        ...userProfile,
+        balance: newBalance,
+        tickets: newTickets
+      };
+
+      setUserProfile(updatedUser);
+      setLedgerList(prev => [newLedger, ...prev]);
+      const nextActs = [loginLog, ...activities].slice(0, 50);
+      setActivities(nextActs);
+      saveClientStateDirectly(competitions, updatedUser, nextActs, pastComps, [newLedger, ...ledgerList]);
+      playSoundCoin();
       return;
     }
 
@@ -177,6 +403,52 @@ export default function App() {
     setLastScore(score);
     setIsGameActive(false);
 
+    if (isClientMode) {
+      const updatedComps = competitions.map(c => {
+        if (c.id !== selectedCompId) return c;
+        const leaderboard = [...c.leaderboard];
+        const existingIdx = leaderboard.findIndex(e => e.username === userProfile.username);
+        
+        if (existingIdx !== -1) {
+          if (score > leaderboard[existingIdx].score) {
+            leaderboard[existingIdx] = {
+              ...leaderboard[existingIdx],
+              score,
+              timestamp: new Date().toISOString()
+            };
+          }
+        } else {
+          leaderboard.push({
+            username: userProfile.username,
+            score,
+            timestamp: new Date().toISOString(),
+            isUser: true
+          });
+        }
+        leaderboard.sort((a, b) => b.score - a.score || new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        return { ...c, leaderboard };
+      });
+
+      const activeCompObj = updatedComps.find(c => c.id === selectedCompId);
+      const userRank = activeCompObj ? activeCompObj.leaderboard.findIndex(e => e.username === userProfile.username) + 1 : 1;
+
+      const gameLog: ActivityLog = {
+        id: Math.random().toString(),
+        username: userProfile.username,
+        type: "score",
+        details: `Scored ${score} on ${activeCompObj?.prizeName}! Rank is now #${userRank}`,
+        timestamp: new Date().toISOString()
+      };
+
+      setCompetitions(updatedComps);
+      const nextActs = [gameLog, ...activities].slice(0, 50);
+      setActivities(nextActs);
+      saveClientStateDirectly(updatedComps, userProfile, nextActs, pastComps, ledgerList);
+      
+      triggerAiCommentary(score, userRank);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/competitions/${selectedCompId}/submit-score`, {
         method: "POST",
@@ -196,7 +468,7 @@ export default function App() {
     }
   };
 
-  // Trigger Gemini sport referee announcers
+  // Trigger Gemini sport referee announcers with high energy local generator as backup
   const triggerAiCommentary = async (pscore: number, rank: number) => {
     setAiGenerating(true);
     setAiCommentary("SYSTEM: Scanning video footage... Referee generating commentary...");
@@ -205,6 +477,19 @@ export default function App() {
     if (!activeComp) return;
 
     const leader = activeComp.leaderboard[0] || { username: "None", score: 0 };
+
+    if (isClientMode) {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setAiGenerating(false);
+
+      const commentaryLines = [
+        `🎙️ ARCADE REFEREE: Match alignment clear! ${userProfile.username} locked in ${pscore} neon sheets on ${activeComp.prizeName}! This alters the leaderboards! Current index is Rank #${rank}.`,
+        `🎙️ NEON BROADCAST: Stacking levels stabilized! Grid pilots are raging as ${userProfile.username} locks score equal to ${pscore}. The topmost competitor is still ${leader.username} holding score ${leader.score}!`,
+        `🎙️ SPECTRO RUN: Excellent laser alignment! Every block dropped was timed cleanly. ${pscore} layers assembled. Play another credit pass to reach higher neon limits!`
+      ];
+      setAiCommentary(commentaryLines[Math.floor(Math.random() * commentaryLines.length)]);
+      return;
+    }
 
     try {
       const res = await fetch("/api/gemini/commentary", {
@@ -223,14 +508,37 @@ export default function App() {
       setAiCommentary(data.commentary);
     } catch (err) {
       console.warn(err);
-      setAiCommentary("SYSTEM: Noise levels elevated. Neon grid feedback logged.");
+      const fallbackCommentaries = [
+        `🕹️ ULTRA REFEREE: Grid alignment complete! ${userProfile.username} stacked ${pscore} layers. Telemetry successfully registered on the global database.`,
+        `🕹️ ULTRA REFEREE: A solid tower of ${pscore} blocks is locked inside the chamber! The crowd in the cyber arena is roaring. Keep it up!`
+      ];
+      setAiCommentary(fallbackCommentaries[Math.floor(Math.random() * fallbackCommentaries.length)]);
     } finally {
       setAiGenerating(false);
     }
   };
 
-  // Handle support ticketing query via Gemini Chatbot
+  // Handle support ticketing query via Gemini Chatbot with themed local responder backup
   const handleSendSupportTicket = async (query: string, category: string): Promise<string> => {
+    if (isClientMode) {
+      setAiGenerating(true);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setAiGenerating(false);
+
+      let reply = "";
+      const qLower = query.toLowerCase();
+      if (category === "Shipping Manifests" || qLower.includes("shipping") || qLower.includes("delivery") || qLower.includes("where")) {
+        reply = "📟 TRANSMISSION ACQUIRED: Perfect! All past regional rewards are logged in our Winners Hall. We dispatch worldwide from Japan/corridor corridors & Texas logistics hubs via fully insured DHL Star Flight Priority with tracking codes generated inside 48 hours of victory validation!";
+      } else if (category === "Block Speeds & Controls" || qLower.includes("control") || qLower.includes("keys") || qLower.includes("speed")) {
+        reply = "📟 GRID INGRESS COMPLETE: Low-latency controls are calibrated perfectly. Tip: Dropping a segment within a mere 6 pixels of the underlying stack node triggers a Perfect Flash, preserving your exact stack size and granting double multiplier points!";
+      } else if (category === "Winner Verification" || qLower.includes("cheat") || qLower.includes("win") || qLower.includes("bot")) {
+        reply = "📟 INTEGRITY DECK STABLE: To prevent bot manipulation, all high-tier stack score heights trigger CRT video timing verifications. Our support team will analyze inputs and contact you within 15 minutes of countdown zero to process the physical gift!";
+      } else {
+        reply = `📟 CHANNELS ACTIVE: Your request regarding '${category}' has been safely registered. Cyber-operators are reviewing your ledger to align metrics. Keep stacking, operator!`;
+      }
+      return reply;
+    }
+
     try {
       const res = await fetch("/api/help/support", {
         method: "POST",
@@ -245,8 +553,49 @@ export default function App() {
     }
   };
 
-  // Direct Vault Deposit Handler inside DepositVault component
+  // Direct Vault Deposit Handler inside DepositVault component with local mode support
   const handleDepositVaultSubmit = async (amount: string, cardDetails: any): Promise<boolean> => {
+    if (isClientMode) {
+      const depAmount = parseFloat(amount);
+      if (isNaN(depAmount) || depAmount <= 0) return false;
+
+      const newBalance = userProfile.balance + depAmount;
+      const txId = `TX-${Math.floor(Math.random() * 9000) + 1000}`;
+      const hexBytes = Array.from({length: 8}, () => Math.floor(Math.random()*16).toString(16)).join("");
+      const txHash = `0x${hexBytes}...7f00`;
+
+      const newLedger: LedgerEntry = {
+        id: txId,
+        type: "deposit",
+        amount: depAmount,
+        balanceAfter: newBalance,
+        hash: txHash,
+        timestamp: new Date().toISOString(),
+        details: `Replenished Vault balance (+ $${depAmount.toFixed(2)})`
+      };
+
+      const depLog: ActivityLog = {
+        id: Math.random().toString(),
+        username: userProfile.username,
+        type: "deposit",
+        details: `Deposited $${depAmount.toFixed(2)} using secured checkout gateway!`,
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedUser: UserProfile = {
+        ...userProfile,
+        balance: newBalance
+      };
+
+      setUserProfile(updatedUser);
+      setLedgerList(prev => [newLedger, ...prev]);
+      const nextActs = [depLog, ...activities].slice(0, 50);
+      setActivities(nextActs);
+      saveClientStateDirectly(competitions, updatedUser, nextActs, pastComps, [newLedger, ...ledgerList]);
+      playSoundCoin();
+      return true;
+    }
+
     try {
       const res = await fetch("/api/wallet/deposit", {
         method: "POST",
@@ -307,6 +656,43 @@ export default function App() {
     }
     const cleaned = newUsername.trim().replace(/[^a-zA-Z0-9_]/g, "");
 
+    if (isClientMode) {
+      if (!cleaned) {
+        setUsernameError("Invalid username format.");
+        return;
+      }
+      const oldUsername = userProfile.username;
+      const updatedUser: UserProfile = {
+        ...userProfile,
+        username: cleaned
+      };
+
+      const updatedActivities = activities.map(act => {
+        if (act.username === oldUsername) {
+          return { ...act, username: cleaned };
+        }
+        return act;
+      });
+
+      const updatedComps = competitions.map(comp => {
+        const leaderboard = comp.leaderboard.map(e => {
+          if (e.username === oldUsername) {
+            return { ...e, username: cleaned };
+          }
+          return e;
+        });
+        return { ...comp, leaderboard };
+      });
+
+      setUserProfile(updatedUser);
+      setCompetitions(updatedComps);
+      setActivities(updatedActivities);
+      saveClientStateDirectly(updatedComps, updatedUser, updatedActivities, pastComps, ledgerList);
+      setShowProfile(false);
+      setNewUsername("");
+      return;
+    }
+
     try {
       const res = await fetch("/api/profile/update-username", {
         method: "POST",
@@ -328,16 +714,70 @@ export default function App() {
 
   // Sim handlers
   const handleDevSimulateOpponent = async () => {
+    if (isClientMode) {
+      triggerClientMockOpponentPlay();
+      return;
+    }
     await fetch("/api/admin/simulate-opponent", { method: "POST" });
     fetchState();
   };
 
   const handleDevEndCompetition = async (id: string) => {
+    if (isClientMode) {
+      const updatedComps = competitions.map(c => {
+        if (c.id !== id) return c;
+        const top = c.leaderboard[0];
+        const updatedComp: Competition = {
+          ...c,
+          status: "ended",
+          winner: top ? { username: top.username, score: top.score } : null
+        };
+        
+        const topUser = top ? top.username : "No-one";
+        const topScr = top ? top.score : 0;
+        const logEntry: ActivityLog = {
+          id: Math.random().toString(),
+          username: topUser,
+          type: "ended",
+          details: `🏆 Competition for ${c.prizeName} ended! ${topUser} wins with score ${topScr}!`,
+          timestamp: new Date().toISOString()
+        };
+        setActivities(prev => [logEntry, ...prev].slice(0, 50));
+        return updatedComp;
+      });
+
+      setCompetitions(updatedComps);
+      saveClientStateDirectly(updatedComps, userProfile, activities, pastComps, ledgerList);
+      return;
+    }
     await fetch(`/api/admin/end-competition/${id}`, { method: "POST" });
     fetchState();
   };
 
   const handleDevRestartCompetition = async (id: string) => {
+    if (isClientMode) {
+      const updatedComps = competitions.map(c => {
+        if (c.id !== id) return c;
+        return {
+          ...c,
+          status: "active" as const,
+          endsAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          winner: null,
+          leaderboard: c.id === "iphone" 
+            ? [
+                { username: "pixel_master", score: 14, timestamp: new Date(Date.now() - 3600000).toISOString(), isUser: false },
+                { username: "neon_wizard", score: 11, timestamp: new Date(Date.now() - 7200000).toISOString(), isUser: false },
+              ]
+            : [
+                { username: "retro_rachel", score: 18, timestamp: new Date(Date.now() - 1800000).toISOString(), isUser: false }
+              ]
+        };
+      });
+
+      setCompetitions(updatedComps);
+      saveClientStateDirectly(updatedComps, userProfile, activities, pastComps, ledgerList);
+      return;
+    }
     await fetch(`/api/admin/restart-competition/${id}`, { method: "POST" });
     fetchState();
   };
