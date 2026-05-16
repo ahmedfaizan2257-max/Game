@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import neonIphone from "./assets/images/neon_iphone_pro_1778968589318.png";
+import neonPs5 from "./assets/images/neon_ps5_pro_1778968613943.png";
+import neonAirpods from "./assets/images/neon_airpods_max_1778968640657.png";
 import {
   Trophy,
   Coins,
@@ -361,12 +364,12 @@ export default function App() {
 
   const getPrizeImage = (id: string) => {
     if (id === "iphone") {
-      return "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&q=80&w=600";
+      return neonIphone;
     }
     if (id === "ps5") {
-      return "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&q=80&w=600";
+      return neonPs5;
     }
-    return "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&q=80&w=600";
+    return neonAirpods;
   };
 
   return (
