@@ -1,0 +1,6 @@
+{
+  "name": "VaporPrize: Neon Skill Game Arena",
+  "description": "An arcade skill-competition platform where players enter tournaments to win premium real-world prizes like iPhone 16 Pro, competing on a live real-time leaderboard in addictive interactive game challenges.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
