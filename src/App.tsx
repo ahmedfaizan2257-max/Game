@@ -385,7 +385,7 @@ export default function App() {
         <div className="flex gap-3 items-center">
           <Navigation className="w-6 h-6 text-[#D4AF37] stroke-2 animate-pulse" />
           <div className="font-serif">
-            <h1 className="text-xl tracking-[4px] font-bold text-white uppercase">DreamDrive</h1>
+            <h1 className="text-xl tracking-[4px] font-bold text-white uppercase">Game competetion</h1>
             <span className="block text-[8px] font-mono tracking-[4px] text-zinc-500 uppercase">South Africa Elite</span>
           </div>
         </div>
@@ -518,7 +518,7 @@ export default function App() {
           <div className="flex flex-col items-center justify-center h-96 space-y-4">
             <div className="w-8 h-8 rounded-full border-2 border-dashed border-[#D4AF37] animate-spin" />
             <span className="text-xs uppercase font-mono tracking-widest text-zinc-500">
-              Synchronizing DreamDrive VIP Systems...
+              Synchronizing Game competetion VIP Systems...
             </span>
           </div>
         ) : (
@@ -659,9 +659,9 @@ export default function App() {
       {/* Footer metadata details */}
       <footer className="mt-24 border-t border-zinc-900 pt-8 max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between text-[11px] text-zinc-550 gap-6 font-mono">
         <div className="space-y-1">
-          <span className="text-white font-bold opacity-80 uppercase">DreamDrive co.za Clone platform build</span>
+          <span className="text-white font-bold opacity-80 uppercase">Game competetion Platform Build</span>
           <p className="text-zinc-650 leading-relaxed font-sans">
-            Designed as a high-fidelity clone of dreamdrive.co.za incorporating bespoke car soundboard engines, animated telemetry trace paths, real South African Rand (ZAR) prices, and Chef de Concierge Enzo consultation chats powered by Gemini API.
+            Designed as a high-fidelity clone platform incorporating bespoke car soundboard engines, animated telemetry trace paths, real South African Rand (ZAR) prices, and Chef de Concierge Enzo consultation chats powered by Gemini API.
           </p>
         </div>
 

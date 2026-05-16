@@ -12,7 +12,7 @@ export default function EnzoConcierge() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       sender: "enzo",
-      text: "Salutations, Pilot. I am Enzo, Chef de Concierge for DreamDrive South Africa. If you need telemetry counsel, route highlights, licensing exceptions, or help configuring a bespoke run, command me.",
+      text: "Salutations, Pilot. I am Enzo, Chef de Concierge for Game competetion South Africa. If you need telemetry counsel, route highlights, licensing exceptions, or help configuring a bespoke run, command me.",
       time: "Just now"
     }
   ]);
